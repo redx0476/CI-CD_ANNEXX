@@ -52,6 +52,13 @@ Rails.application.configure do
   # Replace the default in-process and non-durable queuing backend for Active Job.
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
+  
+  # Configure solid_cable for production (after initialization)
+  config.after_initialize do
+    if defined?(SolidCable) && Rails.application.config.respond_to?(:solid_cable)
+      Rails.application.config.solid_cable.connects_to = { database: { writing: :cable } }
+    end
+  end
 
   # Ignore bad email addresses and do not raise email delivery errors.
   # Set this to true and configure the email server for immediate delivery to raise delivery errors.

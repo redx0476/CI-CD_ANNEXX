@@ -1,0 +1,81 @@
+#!/usr/bin/env ruby
+
+# Staging environment setup script
+# This script helps set up staging-specific configurations
+
+require 'fileutils'
+
+def setup_staging_directories
+  puts "📁 Creating staging directories..."
+  
+  directories = [
+    'storage/staging',
+    'log/staging',
+    'tmp/pids/staging'
+  ]
+  
+  directories.each do |dir|
+    FileUtils.mkdir_p(dir)
+    puts "  ✅ Created #{dir}"
+  end
+end
+
+def setup_staging_credentials
+  puts "🔐 Setting up staging credentials..."
+  
+  if File.exist?('config/credentials/staging.yml.enc')
+    puts "  ⚠️  Staging credentials already exist"
+  else
+    puts "  📝 Run the following command to edit staging credentials:"
+    puts "     bin/rails credentials:edit --environment staging"
+  end
+end
+
+def setup_gitignore_staging
+  puts "📋 Updating .gitignore for staging..."
+  
+  gitignore_content = File.read('.gitignore')
+  staging_entries = [
+    "# Staging specific files",
+    "/storage/staging",
+    "/config/credentials/staging.key"
+  ]
+  
+  needs_update = false
+  staging_entries.each do |entry|
+    unless gitignore_content.include?(entry)
+      gitignore_content += "\n#{entry}"
+      needs_update = true
+    end
+  end
+  
+  if needs_update
+    File.write('.gitignore', gitignore_content)
+    puts "  ✅ Updated .gitignore with staging entries"
+  else
+    puts "  ℹ️  .gitignore already configured for staging"
+  end
+end
+
+def show_next_steps
+  puts "\n🚀 Staging Environment Setup Complete!"
+  puts "\nNext steps:"
+  puts "1. Switch to staging environment:"
+  puts "   ./bin/env-switch staging"
+  puts "\n2. Set up your staging database:"
+  puts "   RAILS_ENV=staging bin/rails db:create"
+  puts "   RAILS_ENV=staging bin/rails db:migrate"
+  puts "\n3. Configure staging credentials:"
+  puts "   bin/rails credentials:edit --environment staging"
+  puts "\n4. Start staging server:"
+  puts "   RAILS_ENV=staging bin/rails server -p 3001"
+  puts "\n5. Configure your staging-specific environment variables in .env.staging"
+end
+
+puts "🎯 Setting up Rails Staging Environment for ANNEXX"
+puts "=" * 50
+
+setup_staging_directories
+setup_staging_credentials
+setup_gitignore_staging
+show_next_steps

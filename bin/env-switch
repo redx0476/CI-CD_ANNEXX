@@ -1,0 +1,54 @@
+#!/usr/bin/env ruby
+
+# Environment switching script
+# Usage: bin/env-switch [development|test|staging|production]
+
+require 'fileutils'
+
+def switch_environment(target_env)
+  valid_environments = %w[development test staging production]
+  
+  unless valid_environments.include?(target_env)
+    puts "❌ Invalid environment: #{target_env}"
+    puts "Valid environments: #{valid_environments.join(', ')}"
+    exit 1
+  end
+  
+  env_file = ".env.#{target_env}"
+  
+  unless File.exist?(env_file)
+    puts "❌ Environment file #{env_file} not found!"
+    exit 1
+  end
+  
+  # Backup current .env if it exists
+  if File.exist?('.env')
+    FileUtils.cp('.env', '.env.backup')
+    puts "📋 Backed up current .env to .env.backup"
+  end
+  
+  # Copy the target environment file to .env
+  FileUtils.cp(env_file, '.env')
+  puts "✅ Switched to #{target_env} environment"
+  puts "📁 Active configuration: #{env_file} → .env"
+  
+  # Set RAILS_ENV in the copied file
+  content = File.read('.env')
+  content.gsub!(/^RAILS_ENV=.*$/, "RAILS_ENV=#{target_env}")
+  File.write('.env', content)
+  
+  puts "🚀 Run 'rails server' to start in #{target_env} mode"
+end
+
+if ARGV.empty?
+  puts "Usage: bin/env-switch [development|test|staging|production]"
+  puts "\nAvailable environments:"
+  %w[development test staging production].each do |env|
+    file = ".env.#{env}"
+    status = File.exist?(file) ? "✅" : "❌"
+    puts "  #{status} #{env} (#{file})"
+  end
+  exit 0
+end
+
+switch_environment(ARGV[0])

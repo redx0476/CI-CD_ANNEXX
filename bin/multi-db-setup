@@ -1,0 +1,245 @@
+#!/usr/bin/env ruby
+
+# Multi-database setup script for ANNEXX
+# Sets up cache, queue, and cable databases for all environments
+
+require 'fileutils'
+
+ENVIRONMENTS = %w[development test staging production]
+
+def colorize(text, color_code)
+  "\e[#{color_code}m#{text}\e[0m"
+end
+
+def green(text) = colorize(text, 32)
+def blue(text) = colorize(text, 34)
+def yellow(text) = colorize(text, 33)
+def red(text) = colorize(text, 31)
+
+def log_info(message)
+  puts blue("ℹ️  #{message}")
+end
+
+def log_success(message)
+  puts green("✅ #{message}")
+end
+
+def log_warning(message)
+  puts yellow("⚠️  #{message}")
+end
+
+def log_error(message)
+  puts red("❌ #{message}")
+end
+
+def run_command(command, env = nil)
+  env_prefix = env ? "RAILS_ENV=#{env} " : ""
+  full_command = "#{env_prefix}#{command}"
+  
+  log_info("Running: #{full_command}")
+  system(full_command)
+end
+
+def drop_databases_for_env(env)
+  log_info("Dropping #{env} databases if they exist...")
+  
+  # Drop databases (this will drop all: primary, cache, queue, cable)
+  if run_command("bin/rails db:drop", env)
+    log_success("Dropped #{env} databases")
+  else
+    log_warning("Some #{env} databases might not have existed")
+  end
+end
+
+def create_databases_for_env(env)
+  log_info("Setting up #{env} databases...")
+  
+  # Create primary database
+  if run_command("bin/rails db:create", env)
+    log_success("Created #{env} primary database")
+  else
+    log_error("Failed to create #{env} primary database")
+    return false
+  end
+  
+  # Run migrations for primary database
+  if run_command("bin/rails db:migrate", env)
+    log_success("Migrated #{env} primary database")
+  else
+    log_warning("Failed to migrate #{env} primary database (might be expected for fresh setup)")
+  end
+  
+  # Load solid_cache schema
+  if run_command("bin/rails db:schema:load:cache", env)
+    log_success("Loaded solid_cache schema for #{env}")
+  else
+    log_warning("Solid_cache schema load failed for #{env} (might not be needed)")
+  end
+  
+  # Load solid_queue schema
+  if run_command("bin/rails db:schema:load:queue", env)
+    log_success("Loaded solid_queue schema for #{env}")
+  else
+    log_warning("Solid_queue schema load failed for #{env} (might not be needed)")
+  end
+  
+  # Load solid_cable schema
+  if run_command("bin/rails db:schema:load:cable", env)
+    log_success("Loaded solid_cable schema for #{env}")
+  else
+    log_warning("Solid_cable schema load failed for #{env} (might not be needed)")
+  end
+  
+  true
+end
+
+def setup_migration_directories
+  log_info("Creating migration directories...")
+  
+  %w[cache_migrate queue_migrate cable_migrate].each do |dir|
+    dir_path = "db/#{dir}"
+    FileUtils.mkdir_p(dir_path)
+    
+    # Create .keep file
+    keep_file = File.join(dir_path, '.keep')
+    FileUtils.touch(keep_file) unless File.exist?(keep_file)
+    
+    log_success("Created #{dir_path}")
+  end
+end
+
+def generate_solid_migrations
+  log_info("Generating solid_cache and solid_queue migrations...")
+  
+  # Generate solid_cache migration
+  if run_command("bin/rails generate solid_cache:install")
+    log_success("Generated solid_cache migration")
+  else
+    log_warning("Solid_cache migration might already exist")
+  end
+  
+  # Generate solid_queue migration
+  if run_command("bin/rails generate solid_queue:install")
+    log_success("Generated solid_queue migration")
+  else
+    log_warning("Solid_queue migration might already exist")
+  end
+  
+  # Generate solid_cable migration
+  if run_command("bin/rails generate solid_cable:install")
+    log_success("Generated solid_cable migration")
+  else
+    log_warning("Solid_cable migration might already exist")
+  end
+end
+
+def setup_storage_directories
+  log_info("Creating storage directories for all environments...")
+  
+  ENVIRONMENTS.each do |env|
+    storage_dir = "storage/#{env}"
+    FileUtils.mkdir_p(storage_dir)
+    log_success("Created #{storage_dir}")
+  end
+end
+
+def show_database_status
+  puts "\n" + "=" * 60
+  puts blue("📊 Database Status Summary")
+  puts "=" * 60
+  
+  ENVIRONMENTS.each do |env|
+    puts "\n#{green(env.upcase)} Environment:"
+    puts "  📄 Primary:  annexx_#{env}"
+    puts "  🗄️  Cache:    annexx_#{env}_cache"
+    puts "  📋 Queue:    annexx_#{env}_queue"
+    puts "  📡 Cable:    annexx_#{env}_cable"
+  end
+end
+
+def show_usage
+  puts blue("🚀 ANNEXX Multi-Database Setup")
+  puts "=" * 50
+  puts "\nUsage: ./bin/multi-db-setup [OPTIONS]"
+  puts "\nOptions:"
+  puts "  --drop, -d    Drop existing databases before creating new ones"
+  puts "  --force       Skip confirmation prompt (use with --drop)"
+  puts "  --help, -h    Show this help message"
+  puts "\nExamples:"
+  puts "  ./bin/multi-db-setup                 # Normal setup"
+  puts "  ./bin/multi-db-setup --drop          # Drop and recreate all databases"
+  puts "  ./bin/multi-db-setup --drop --force  # Drop and recreate without confirmation"
+  puts "\n" + yellow("⚠️  WARNING: --drop will destroy all existing data!")
+end
+
+def main
+  # Parse command line arguments
+  show_help = ARGV.include?('--help') || ARGV.include?('-h')
+  drop_existing = ARGV.include?('--drop') || ARGV.include?('-d')
+  force_drop = ARGV.include?('--force')
+  
+  if show_help
+    show_usage
+    exit 0
+  end
+  
+  puts blue("🚀 ANNEXX Multi-Database Setup")
+  puts "=" * 50
+  
+  if drop_existing && !force_drop
+    puts yellow("⚠️  WARNING: This will DROP ALL existing databases!")
+    print "Type 'yes' to continue: "
+    confirmation = STDIN.gets.chomp
+    unless confirmation.downcase == 'yes'
+      puts red("❌ Setup cancelled!")
+      exit 0
+    end
+  end
+  
+  # Check if we're in a Rails app
+  unless File.exist?('config/application.rb')
+    log_error("Not in a Rails application directory!")
+    exit 1
+  end
+  
+  # Setup directories
+  setup_migration_directories
+  setup_storage_directories
+  
+  # Generate migrations
+  generate_solid_migrations
+  
+  # Setup databases for each environment
+  ENVIRONMENTS.each do |env|
+    puts "\n" + "-" * 40
+    case env
+    when 'production'
+      log_warning("Skipping production database setup (requires manual configuration)")
+      next
+    when 'staging'
+      log_info("For staging, make sure you have set ANNEXX_STAGING_DATABASE_PASSWORD")
+    end
+    
+    # Drop databases if requested
+    if drop_existing
+      drop_databases_for_env(env)
+    end
+    
+    create_databases_for_env(env)
+  end
+  
+  show_database_status
+  
+  puts "\n" + green("✅ Multi-database setup complete!")
+  puts "\n🔧 Next steps:"
+  puts "1. Configure your environment variables in .env files"
+  puts "2. For production: Set ANNEXX_DATABASE_PASSWORD"
+  puts "3. For staging: Set ANNEXX_STAGING_DATABASE_PASSWORD" 
+  puts "4. Run: bin/rails server to start your application"
+  puts "\n📋 Useful commands:"
+  puts "• Check database status: bin/rails db:version"
+  puts "• Switch environments: ./bin/env-switch [environment]"
+  puts "• Migrate specific database: RAILS_ENV=staging bin/rails db:migrate"
+end
+
+main

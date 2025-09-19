@@ -20,7 +20,7 @@ Rails.application.configure do
 
   # Show full error reports.
   config.consider_all_requests_local = true
-  config.cache_store = :null_store
+  config.cache_store = :solid_cache_store
 
   # Render exception templates for rescuable exceptions and raise for other exceptions.
   config.action_dispatch.show_exceptions = :rescuable
@@ -38,6 +38,17 @@ Rails.application.configure do
 
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }
+  
+  # Use solid_queue for Active Job in test
+  config.active_job.queue_adapter = :solid_queue
+  config.solid_queue.connects_to = { database: { writing: :queue } }
+  
+  # Configure solid_cable for test (after initialization)
+  config.after_initialize do
+    if defined?(SolidCable) && Rails.application.config.respond_to?(:solid_cable)
+      Rails.application.config.solid_cable.connects_to = { database: { writing: :cable } }
+    end
+  end
 
   # Print deprecation notices to the stderr.
   config.active_support.deprecation = :stderr
