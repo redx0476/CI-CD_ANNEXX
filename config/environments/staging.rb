@@ -53,7 +53,7 @@ Rails.application.configure do
   # Use solid_queue for Active Job in staging
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
-  
+
   # Configure solid_cable for staging (after initialization)
   config.after_initialize do
     if defined?(SolidCable) && Rails.application.config.respond_to?(:solid_cable)
@@ -67,7 +67,7 @@ Rails.application.configure do
   config.action_mailer.perform_caching = false
 
   # Set host to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { 
+  config.action_mailer.default_url_options = {
     host: ENV.fetch("STAGING_HOST", "staging.example.com"),
     protocol: ENV.fetch("FORCE_SSL", "false") == "true" ? "https" : "http"
   }
@@ -98,10 +98,10 @@ Rails.application.configure do
   # Staging-specific configurations
   # Enable staging banner or features
   config.staging_mode = true
-  
+
   # Allow web console in staging if needed
   # config.web_console.whitelisted_ips = ['0.0.0.0/0'] if defined?(WebConsole)
-  
+
   # Enable bullet gem in staging for N+1 query detection if available
   if defined?(Bullet)
     config.after_initialize do

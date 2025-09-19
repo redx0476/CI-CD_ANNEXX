@@ -52,7 +52,7 @@ Rails.application.configure do
   # Replace the default in-process and non-durable queuing backend for Active Job.
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
-  
+
   # Configure solid_cable for production (after initialization)
   config.after_initialize do
     if defined?(SolidCable) && Rails.application.config.respond_to?(:solid_cable)

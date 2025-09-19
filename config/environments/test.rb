@@ -38,11 +38,11 @@ Rails.application.configure do
 
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }
-  
+
   # Use solid_queue for Active Job in test
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
-  
+
   # Configure solid_cable for test (after initialization)
   config.after_initialize do
     if defined?(SolidCable) && Rails.application.config.respond_to?(:solid_cable)

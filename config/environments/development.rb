@@ -54,11 +54,11 @@ Rails.application.configure do
 
   # Highlight code that enqueued background job in logs.
   config.active_job.verbose_enqueue_logs = true
-  
+
   # Use solid_queue for Active Job in development
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
-  
+
   # Configure solid_cable for development (after initialization)
   config.after_initialize do
     if defined?(SolidCable) && Rails.application.config.respond_to?(:solid_cable)
