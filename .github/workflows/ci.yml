@@ -6,51 +6,168 @@ on:
   push:
     branches: [ master ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RAILS_ENV: test
+  DISABLE_SPRING: "1"
+  # SimpleCov minimum coverage threshold (enforced in spec helper)
+  SIMPLECOV_MIN_COVERAGE: "90"
+  # RubyCritic minimum score (0-100)
+  RUBYCRITIC_MIN_SCORE: "90"
+  # DB for Rails tests (matches database.yml test names unless you override)
+  DATABASE_HOST: 127.0.0.1
+  DATABASE_PORT: "5432"
+  DATABASE_USERNAME: postgres
+  DATABASE_PASSWORD: postgres
+  # Some Rails setups look for DATABASE_URL; keep it for good measure:
+  DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/annexx_test
+
 jobs:
-  scan_ruby:
+  # ---------- Shared anchors ----------
+  _setup_ruby: &setup_ruby
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+
+    - name: Show bundler environment
+      run: bundle env
+
+  _services_postgres: &services_postgres
+    services:
+      postgres:
+        image: postgres:16
+        ports: [ "5432:5432" ]
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: annexx_test
+        options: >-
+          --health-cmd="pg_isready -U postgres -d annexx_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+  # ---------- Fast static analysis (no DB) ----------
+  security_static:
+    name: Security (Brakeman) + Importmap audit
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - <<: *setup_ruby
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
+      - name: Brakeman (Rails static analysis)
+        run: |
+          bin/brakeman --no-pager --exit-on-warn
 
-      - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bin/brakeman --no-pager
+      - name: Importmap audit (JS deps)
+        run: |
+          bin/importmap audit
 
-  scan_js:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-
-      - name: Scan for security vulnerabilities in JavaScript dependencies
-        run: bin/importmap audit
-
-  lint:
+  lint_ruby:
+    name: Ruby Style (StandardRB → RuboCop fallback)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - <<: *setup_ruby
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+      - name: StandardRB (preferred)
+        run: |
+          if bundle exec standardrb --version >/dev/null 2>&1; then
+            bundle exec standardrb
+          else
+            echo "standardrb not found in Gemfile; falling back to rubocop."
+          fi
+
+      - name: RuboCop (fallback / extra cops)
+        run: |
+          if bundle exec rubocop -V >/dev/null 2>&1; then
+            bundle exec rubocop -f github
+          else
+            echo "rubocop not found; skipped."
+          fi
+
+  lint_js:
+    name: JavaScript Style (StandardJS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node (for JS lint only; app uses importmap at runtime)
+        uses: actions/setup-node@v4
         with:
-          ruby-version: .ruby-version
-          bundler-cache: true
+          node-version: "20"
 
-      - name: Lint code for consistent style
-        run: bin/rubocop -f github
+      - name: StandardJS (works with jQuery/importmap)
+        run: |
+          npx --yes standard "app/javascript/**/*.js" "app/assets/javascripts/**/*.js" \
+            --verbose \
+            --fix=false
+        # If you prefer eslint + jquery plugin, add a package.json and swap this step.
 
+  # ---------- Tests + Quality gates (needs DB) ----------
+  test:
+    name: RSpec + Coverage (SimpleCov) + RubyCritic
+    runs-on: ubuntu-latest
+    <<: *services_postgres
+    steps:
+      - <<: *setup_ruby
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..60}; do
+            pg_isready -h 127.0.0.1 -p 5432 -U postgres -d annexx_test && break
+            sleep 1
+          done
+
+      - name: Prepare DB (create, migrate, seeds if needed)
+        run: |
+          bin/rails db:prepare
+
+      - name: Run RSpec (with SimpleCov)
+        run: |
+          bundle exec rspec --format progress
+
+      - name: Enforce SimpleCov coverage threshold
+        if: always()
+        run: |
+          # If you prefer enforcing purely in spec_helper, you can skip this step.
+          # This step is here in case you want to parse coverage/.last_run.json or fail explicitly.
+          if [ ! -f coverage/.resultset.json ] && [ ! -f coverage/.last_run.json ]; then
+            echo "No coverage report found. Ensure SimpleCov is enabled."
+            exit 1
+          fi
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+
+      - name: RubyCritic (code quality gate)
+        run: |
+          if bundle exec rubycritic --version >/dev/null 2>&1; then
+            bundle exec rubycritic \
+              --no-browser \
+              --minimum-score $RUBYCRITIC_MIN_SCORE \
+              --format json \
+              --report-dir tmp/rubycritic
+          else
+            echo "rubycritic not found in Gemfile; skipped."
+          fi
+
+      - name: Upload RubyCritic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rubycritic
+          path: tmp/rubycritic

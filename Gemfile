@@ -74,3 +74,5 @@ gem "friendly_id", "~> 5.5.1"
 gem "dotenv-rails", "~> 3.1"
 
 gem "devise", "~> 4.9"
+
+gem "standard", "~> 1.51"
