@@ -18,12 +18,28 @@ default: &default
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV["DATABASE_HOST"] %>
+  port: <%= ENV["DATABASE_PORT"] %>
+  username: <%= ENV["DATABASE_USERNAME"] %>
+  password: <%= ENV["DATABASE_PASSWORD"] %>
 
 
 development:
-  <<: *default
-  database: annexx_development
-
+  primary: &primary_development
+    <<: *default
+    database: annexx_development
+  cache:
+    <<: *primary_development
+    database: annexx_development_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_development
+    database: annexx_development_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_development
+    database: annexx_development_cable
+    migrations_paths: db/cable_migrate
   # The specified database role being used to connect to PostgreSQL.
   # To create additional roles in PostgreSQL see `$ createuser --help`.
   # When left blank, PostgreSQL will use the default role. This is
@@ -55,9 +71,21 @@ development:
 # re-generated from your development database when you run "rake".
 # Do not set this db to the same as development or production.
 test:
-  <<: *default
-  database: annexx_test
-
+  primary: &primary_test
+    <<: *default
+    database: annexx_test
+  cache:
+    <<: *primary_test
+    database: annexx_test_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_test
+    database: annexx_test_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_test
+    database: annexx_test_cable
+    migrations_paths: db/cable_migrate
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
 # ever seen by anyone, they now have access to your database.
@@ -72,18 +100,36 @@ test:
 # the values provided in this file. Alternatively, you can specify a connection
 # URL environment variable explicitly:
 #
-#   production:
 #     url: <%= ENV["MY_APP_DATABASE_URL"] %>
 #
 # Read https://guides.rubyonrails.org/configuring.html#configuring-a-database
 # for a full overview on how database connection configuration can be specified.
 #
+staging:
+  primary: &primary_staging
+    <<: *default
+    database: annexx_staging
+    username: <%= ENV["DATABASE_USERNAME"] %>
+    password: <%= ENV["DATABASE_PASSWORD"] %>
+  cache:
+    <<: *primary_staging
+    database: annexx_staging_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_staging
+    database: annexx_staging_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_staging
+    database: annexx_staging_cable
+    migrations_paths: db/cable_migrate
+
 production:
   primary: &primary_production
     <<: *default
     database: annexx_production
-    username: annexx
-    password: <%= ENV["ANNEXX_DATABASE_PASSWORD"] %>
+    username: <%= ENV["DATABASE_USERNAME"] %>
+    password: <%= ENV["DATABASE_PASSWORD"] %>
   cache:
     <<: *primary_production
     database: annexx_production_cache
