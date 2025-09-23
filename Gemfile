@@ -57,6 +57,7 @@ group :development, :test do
   gem "cucumber-rails", "~> 4.0", require: false
   gem "syntax", "~> 1.2"
   gem "rubycritic", "~> 4.10"
+  gem "factory_bot_rails", "~> 6.5"
   gem "faker", "~> 3.5"
   gem "database_cleaner", "~> 2.1"
   # gem "pundit-matchers", "~> 4.0"
@@ -71,3 +72,5 @@ end
 
 gem "friendly_id", "~> 5.5.1"
 gem "dotenv-rails", "~> 3.1"
+
+gem "devise", "~> 4.9"
