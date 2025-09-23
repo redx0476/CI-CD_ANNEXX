@@ -1,0 +1,73 @@
+version: "3.9"
+name: ci_cd_annexx
+
+# Loads two files: ".env" and ".env.<RAILS_ENV>" (e.g. .env.development)
+x-env-files: &env_files
+  env_file:
+    - .env
+    - .env.${RAILS_ENV:-development}
+
+x-common: &common
+  <<: *env_files
+  build:
+    context: .
+    dockerfile: Dockerfile
+  depends_on:
+    db:
+      condition: service_healthy
+  networks:
+    - appnet
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-annexx_${RAILS_ENV:-development}}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-postgres} -d ${POSTGRES_DB:-annexx_${RAILS_ENV:-development}}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432" # expose locally; remove/guard in real prod
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - appnet
+
+  web:
+    <<: *common
+    # Your Dockerfile exposes 80 via Thruster -> Puma.
+    ports:
+      - "3000:80" # hit http://localhost:3000
+    environment:
+      # Rails
+      RAILS_ENV: ${RAILS_ENV:-development}
+      RAILS_LOG_LEVEL: ${RAILS_LOG_LEVEL:-info}
+      RAILS_SERVE_STATIC_FILES: ${RAILS_SERVE_STATIC_FILES:-true}
+      FORCE_SSL: ${FORCE_SSL:-false}
+      # DB connection details are read by config/database.yml via envs from .env files
+
+  worker:
+    <<: *common
+    # Solid Queue worker (poller/dispatcher/scheduler)
+    command: ["./bin/rails", "solid_queue:start"]
+    environment:
+      RAILS_ENV: ${RAILS_ENV:-development}
+
+  # Optional: Tailwind watcher for dev (works best with a dev Dockerfile or bind mount setup)
+  css:
+    <<: *common
+    command: ["./bin/rails", "tailwindcss:watch"]
+    profiles: ["dev"]
+    environment:
+      RAILS_ENV: ${RAILS_ENV:-development}
+
+volumes:
+  pgdata:
+
+networks:
+  appnet:
+    driver: bridge
