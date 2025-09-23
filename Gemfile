@@ -40,7 +40,7 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
-# gem "image_processing", "~> 1.2"
+gem "image_processing", "~> 1.2"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -51,9 +51,23 @@ group :development, :test do
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
+  gem "rspec-rails", "~> 8.0"
+  gem "shoulda", "~> 4.0"
+  gem "shoulda-callback-matchers", "~> 1.1"
+  gem "cucumber-rails", "~> 4.0", require: false
+  gem "syntax", "~> 1.2"
+  gem "rubycritic", "~> 4.10"
+  gem "faker", "~> 3.5"
+  gem "database_cleaner", "~> 2.1"
+  # gem "pundit-matchers", "~> 4.0"
+  gem "vcr", "~> 6.3"
 end
 
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
 end
+
+
+gem "friendly_id", "~> 5.5.1"
+gem "dotenv-rails", "~> 3.1"
