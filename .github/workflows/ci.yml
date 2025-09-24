@@ -94,8 +94,19 @@ jobs:
         id: detect_js
         shell: bash
         run: |
+          set -e
           shopt -s globstar nullglob
-          files=(app/javascript/**/*.js app/assets/javascripts/**/*.js)
+
+          # Collect existing JS roots (Rails 7+ typically only has app/javascript)
+          roots=()
+          for d in app/javascript app/assets/javascripts; do
+            [ -d "$d" ] && roots+=("$d")
+          done
+
+          files=()
+          for r in "${roots[@]}"; do
+            files+=("$r"/**/*.js)
+          done
 
           # Build ignore regex from .standardignore if present
           ignore_re=""
@@ -115,9 +126,7 @@ jobs:
           : > /tmp/js_files.txt
           if [ -n "$ignore_re" ]; then
             for f in "${files[@]}"; do
-              if ! [[ "$f" =~ $ignore_re ]]; then
-                echo "$f" >> /tmp/js_files.txt
-              fi
+              [[ "$f" =~ $ignore_re ]] || echo "$f" >> /tmp/js_files.txt
             done
           else
             printf '%s\n' "${files[@]}" > /tmp/js_files.txt
@@ -125,7 +134,7 @@ jobs:
 
           if [ ! -s /tmp/js_files.txt ]; then
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No JS files to lint after applying .standardignore"
+            echo "No JS files to lint after applying .standardignore (or no JS dirs)."
           else
             echo "found=true" >> "$GITHUB_OUTPUT"
             echo "Files to lint:"
@@ -161,11 +170,27 @@ jobs:
           exit 1
 
       - name: Lightweight JS security sanity
+        shell: bash
         run: |
-          if find app/javascript app/assets/javascripts -name "*.js" -exec grep -l "eval(" {} \; | head -1; then
+          set -e
+          # Collect existing JS roots safely
+          js_dirs=()
+          for d in app/javascript app/assets/javascripts; do
+            [ -d "$d" ] && js_dirs+=("$d")
+          done
+
+          if [ ${#js_dirs[@]} -eq 0 ]; then
+            echo "No JS directories found; skipping JS security sanity."
+            exit 0
+          fi
+
+          # Hard fail on eval()
+          if grep -RIl --include='*.js' 'eval(' "${js_dirs[@]}" | head -1 ; then
             echo "❌ Found eval() usage"; exit 1
           fi
-          if find app/javascript app/assets/javascripts -name "*.js" -exec grep -l "innerHTML\s*=" {} \; | head -1; then
+
+          # Warn on innerHTML (non-fatal)
+          if grep -RIl --include='*.js' -E 'innerHTML\s*=' "${js_dirs[@]}" | head -1 ; then
             echo "⚠️  innerHTML usage detected; ensure sanitization"
           fi
 
