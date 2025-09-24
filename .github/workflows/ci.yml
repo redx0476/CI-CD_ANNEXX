@@ -32,7 +32,7 @@ jobs:
   # ---------- Shared anchors ----------
   _setup_ruby: &setup_ruby
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
@@ -99,7 +99,7 @@ jobs:
     name: JavaScript Style (StandardJS)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node (for JS lint only; app uses importmap at runtime)
         uses: actions/setup-node@v4
