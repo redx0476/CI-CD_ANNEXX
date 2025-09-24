@@ -97,6 +97,7 @@ jobs:
           set -e
           shopt -s globstar nullglob
 
+          # Collect existing JS roots (Rails 7+ typically only has app/javascript)
           roots=()
           for d in app/javascript app/assets/javascripts; do
             [ -d "$d" ] && roots+=("$d")
@@ -107,15 +108,16 @@ jobs:
             files+=("$r"/**/*.js)
           done
 
+          # Build ignore regex from .standardignore if present
           ignore_re=""
           if [ -f .standardignore ]; then
             mapfile -t ig < <(sed -e 's/#.*$//' -e '/^\s*$/d' .standardignore)
             for pat in "${ig[@]}"; do
               rx="$pat"
-              rx="${rx//\./\\.}"
-              rx="${rx//**\//.*/}"
-              rx="${rx//\*\*/.*}"
-              rx="${rx//\*/[^/]*}"
+              rx="${rx//\./\\.}"        # escape dots
+              rx="${rx//**\//.*/}"      # **/ -> .*/
+              rx="${rx//\*\*/.*}"       # ** -> .*
+              rx="${rx//\*/[^/]*}"      # *  -> [^/]*
               rx="${rx%/}(/.*)?"
               [ -z "$ignore_re" ] && ignore_re="($rx)" || ignore_re="$ignore_re|($rx)"
             done
@@ -171,17 +173,23 @@ jobs:
         shell: bash
         run: |
           set -e
+          # Collect existing JS roots safely
           js_dirs=()
           for d in app/javascript app/assets/javascripts; do
             [ -d "$d" ] && js_dirs+=("$d")
           done
+
           if [ ${#js_dirs[@]} -eq 0 ]; then
             echo "No JS directories found; skipping JS security sanity."
             exit 0
           fi
+
+          # Hard fail on eval()
           if grep -RIl --include='*.js' 'eval(' "${js_dirs[@]}" | head -1 ; then
             echo "❌ Found eval() usage"; exit 1
           fi
+
+          # Warn on innerHTML (non-fatal)
           if grep -RIl --include='*.js' -E 'innerHTML\s*=' "${js_dirs[@]}" | head -1 ; then
             echo "⚠️  innerHTML usage detected; ensure sanitization"
           fi
@@ -366,20 +374,6 @@ jobs:
             sleep 1
           done
 
-      - name: Adjust coverage gate dynamically
-        shell: bash
-        run: |
-          SPEC_COUNT=$(git ls-files 'spec/**/*_spec.rb' | wc -l || echo 0)
-          if [ "$SPEC_COUNT" -eq 0 ]; then
-            echo "No *_spec.rb files found → setting SIMPLECOV_MIN_COVERAGE=0 for this run."
-            echo "SIMPLECOV_MIN_COVERAGE=0" >> "$GITHUB_ENV"
-          else
-            BRANCH="${GITHUB_REF##*/}"
-            if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "master" ]; then
-              echo "Running on branch '$BRANCH' with existing specs; keeping configured gate: ${SIMPLECOV_MIN_COVERAGE}%"
-            fi
-          fi
-
       - name: Prepare DB
         run: bin/rails db:prepare
 
@@ -434,7 +428,7 @@ jobs:
           echo "| Tests/Quality | **${{ needs.test_suite.result }}** |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🧪 Gates" >> $GITHUB_STEP_SUMMARY
-          echo "- SimpleCov minimum (this run): **${SIMPLECOV_MIN_COVERAGE}%**" >> $GITHUB_STEP_SUMMARY
+          echo "- SimpleCov minimum: **${SIMPLECOV_MIN_COVERAGE}%**" >> $GITHUB_STEP_SUMMARY
           echo "- RubyCritic minimum score: **${RUBYCRITIC_MIN_SCORE}**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
