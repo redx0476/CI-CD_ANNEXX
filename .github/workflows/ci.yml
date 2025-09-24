@@ -90,24 +90,75 @@ jobs:
             echo "⚠️  No config/importmap.rb found"
           fi
 
-      - name: Detect JS files
+      - name: Detect JS files (respect .standardignore)
         id: detect_js
         shell: bash
         run: |
           shopt -s globstar nullglob
           files=(app/javascript/**/*.js app/assets/javascripts/**/*.js)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No JS files found; skipping StandardJS."
-          else
-            printf '%s\n' "${files[@]}" > /tmp/js_files.txt
-            echo "found=true" >> "$GITHUB_OUTPUT"
+
+          # Build ignore regex from .standardignore if present
+          ignore_re=""
+          if [ -f .standardignore ]; then
+            mapfile -t ig < <(sed -e 's/#.*$//' -e '/^\s*$/d' .standardignore)
+            for pat in "${ig[@]}"; do
+              rx="$pat"
+              rx="${rx//\./\\.}"        # escape dots
+              rx="${rx//**\//.*/}"      # **/ -> .*/
+              rx="${rx//\*\*/.*}"       # ** -> .*
+              rx="${rx//\*/[^/]*}"      # *  -> [^/]*
+              rx="${rx%/}(/.*)?"
+              [ -z "$ignore_re" ] && ignore_re="($rx)" || ignore_re="$ignore_re|($rx)"
+            done
           fi
 
-      - name: StandardJS (no package.json)
+          : > /tmp/js_files.txt
+          if [ -n "$ignore_re" ]; then
+            for f in "${files[@]}"; do
+              if ! [[ "$f" =~ $ignore_re ]]; then
+                echo "$f" >> /tmp/js_files.txt
+              fi
+            done
+          else
+            printf '%s\n' "${files[@]}" > /tmp/js_files.txt
+          fi
+
+          if [ ! -s /tmp/js_files.txt ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No JS files to lint after applying .standardignore"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Files to lint:"
+            cat /tmp/js_files.txt
+          fi
+
+      - name: StandardJS (auto-fix; no package.json)
         if: steps.detect_js.outputs.found == 'true'
+        id: stdfix
         run: |
-          npx --yes standard@17 --verbose --fix=false $(cat /tmp/js_files.txt)
+          set -e
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          npx --yes standard@17 --fix $(cat /tmp/js_files.txt) || true
+          if ! git diff --quiet; then
+            git diff > /tmp/standardjs-fix.patch
+            echo "had_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "had_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload StandardJS autofix patch
+        if: steps.detect_js.outputs.found == 'true' && steps.stdfix.outputs.had_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: standardjs-autofix-patch
+          path: /tmp/standardjs-fix.patch
+
+      - name: Enforce clean JS style (fail if changes were needed)
+        if: steps.detect_js.outputs.found == 'true' && steps.stdfix.outputs.had_changes == 'true'
+        run: |
+          echo "::error::StandardJS formatted files. Apply patch from artifacts or run: npx standard --fix"
+          exit 1
 
       - name: Lightweight JS security sanity
         run: |
