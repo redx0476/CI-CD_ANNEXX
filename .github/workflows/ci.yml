@@ -97,7 +97,6 @@ jobs:
           set -e
           shopt -s globstar nullglob
 
-          # Collect existing JS roots (Rails 7+ typically only has app/javascript)
           roots=()
           for d in app/javascript app/assets/javascripts; do
             [ -d "$d" ] && roots+=("$d")
@@ -108,16 +107,15 @@ jobs:
             files+=("$r"/**/*.js)
           done
 
-          # Build ignore regex from .standardignore if present
           ignore_re=""
           if [ -f .standardignore ]; then
             mapfile -t ig < <(sed -e 's/#.*$//' -e '/^\s*$/d' .standardignore)
             for pat in "${ig[@]}"; do
               rx="$pat"
-              rx="${rx//\./\\.}"        # escape dots
-              rx="${rx//**\//.*/}"      # **/ -> .*/
-              rx="${rx//\*\*/.*}"       # ** -> .*
-              rx="${rx//\*/[^/]*}"      # *  -> [^/]*
+              rx="${rx//\./\\.}"
+              rx="${rx//**\//.*/}"
+              rx="${rx//\*\*/.*}"
+              rx="${rx//\*/[^/]*}"
               rx="${rx%/}(/.*)?"
               [ -z "$ignore_re" ] && ignore_re="($rx)" || ignore_re="$ignore_re|($rx)"
             done
@@ -173,23 +171,17 @@ jobs:
         shell: bash
         run: |
           set -e
-          # Collect existing JS roots safely
           js_dirs=()
           for d in app/javascript app/assets/javascripts; do
             [ -d "$d" ] && js_dirs+=("$d")
           done
-
           if [ ${#js_dirs[@]} -eq 0 ]; then
             echo "No JS directories found; skipping JS security sanity."
             exit 0
           fi
-
-          # Hard fail on eval()
           if grep -RIl --include='*.js' 'eval(' "${js_dirs[@]}" | head -1 ; then
             echo "❌ Found eval() usage"; exit 1
           fi
-
-          # Warn on innerHTML (non-fatal)
           if grep -RIl --include='*.js' -E 'innerHTML\s*=' "${js_dirs[@]}" | head -1 ; then
             echo "⚠️  innerHTML usage detected; ensure sanitization"
           fi
@@ -390,7 +382,8 @@ jobs:
       - name: RubyCritic (quality gate)
         run: |
           if bundle exec rubycritic --version >/dev/null 2>&1; then
-            bundle exec rubycritic --no-browser --minimum-score $RUBYCRITIC_MIN_SCORE --format json --report-dir tmp/rubycritic
+            # Use --path (not --report-dir). JSON output to tmp/rubycritic.
+            bundle exec rubycritic --no-browser --minimum-score $RUBYCRITIC_MIN_SCORE --format json --path tmp/rubycritic .
           else
             echo "rubycritic not found; skipped."
           fi
