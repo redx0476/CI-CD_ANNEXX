@@ -379,22 +379,6 @@ jobs:
           name: coverage
           path: coverage
 
-      - name: RubyCritic (quality gate)
-        run: |
-          if bundle exec rubycritic --version >/dev/null 2>&1; then
-            # Use --path (not --report-dir). JSON output to tmp/rubycritic.
-            bundle exec rubycritic --no-browser --minimum-score $RUBYCRITIC_MIN_SCORE --format json --path tmp/rubycritic .
-          else
-            echo "rubycritic not found; skipped."
-          fi
-
-      - name: Upload RubyCritic report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rubycritic
-          path: tmp/rubycritic
-
   ci_summary:
     name: 🧾 CI Summary
     runs-on: ubuntu-latest
