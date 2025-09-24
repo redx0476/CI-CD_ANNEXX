@@ -1,0 +1,18 @@
+# .standardignore
+# Common noise
+node_modules/
+vendor/
+tmp/
+log/
+public/
+
+# Test fixtures or legacy JS (edit as you like)
+spec/javascripts/
+test/javascripts/
+
+# Example: ignore everything under controllers if you want
+# app/javascript/controllers/**
+
+# Example: ignore specific files:
+# app/javascript/controllers/hello_controller.js
+# app/javascript/application.js
