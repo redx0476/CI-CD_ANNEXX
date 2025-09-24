@@ -15,13 +15,14 @@
 require "simplecov"
 SimpleCov.start "rails" do
   enable_coverage :branch
-  add_filter %w[/bin/ /db/ /config/ /vendor/ /spec/]
-  coverage_dir "coverage"
+  add_filter %r{^/app/controllers/application_controller\.rb$}
+  add_filter %r{^/app/helpers/application_helper\.rb$}
+  add_filter %r{^/app/jobs/application_job\.rb$}
+  add_filter %r{^/app/mailers/application_mailer\.rb$}
+  add_filter %r{^/app/models/application_record\.rb$}
 
-  # Only enforce threshold in CI (value comes from env)
-  min = ENV.fetch("SIMPLECOV_MIN_COVERAGE", "90").to_i
-  SimpleCov.minimum_coverage(min) if ENV["CI"] == "true"
-  SimpleCov.refuse_coverage_drop
+  minimum_coverage ENV.fetch("SIMPLECOV_MIN_COVERAGE", 90).to_i
+  refuse_coverage_drop
 end
 
 # See https://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
