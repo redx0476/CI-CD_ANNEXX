@@ -1,0 +1,22 @@
+# .standard.yml
+# Tell StandardRB what to ignore completely
+ignore:
+  - "bin/**/*"
+  - "log/**/*"
+  - "tmp/**/*"
+  - "vendor/**/*"
+  - "node_modules/**/*"
+  - "public/**/*"
+
+  # Rails-y generated stuff
+  - "db/schema.rb"
+  - "db/structure.sql"
+  - "db/*_schema.rb"
+  - "db/**/_schema.rb"
+  - "db/migrate/**/*"
+
+  # 👇 what you asked for
+  - "config/environments/**/*"
+  - "config/**/*"
+  # (optional) also ignore initializers if you want fewer false positives
+  # - "config/initializers/**/*"

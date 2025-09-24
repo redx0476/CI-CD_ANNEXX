@@ -27,6 +27,7 @@ AllCops:
   DisplayCopNames: true
   SuggestExtensions: false
   Exclude:
+    - 'config/**/*'
     - 'bin/**/*'
     - 'log/**/*'
     - 'tmp/**/*'
